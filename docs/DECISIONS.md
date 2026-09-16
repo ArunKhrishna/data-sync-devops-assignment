@@ -22,6 +22,11 @@
      (Kustomize output); others are comfortable with Helm hooks and history.
    - Trade-off: two paths mean the README must warn against running both against the same
      namespace at once.
+   - Note: "Helm templates, Kustomize patches the result" is a supported upstream pattern, not
+     a local invention. Helm ships `--post-renderer` and names Kustomize as the example, and
+     Flux's `HelmRelease` has a first-class `.spec.postRenderers[].kustomize` field taking
+     `patches` and `images`. This repo reaches the same result from the Kustomize side
+     (`helmCharts`), which is the shape the brief asks for.
 
 3. **Secret checksum propagation into Kustomize**
    - Chosen: a `replacements` block copying the rendered `checksum/secret` annotation to a

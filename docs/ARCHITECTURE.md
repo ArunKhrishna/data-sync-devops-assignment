@@ -7,23 +7,17 @@ ClusterIP Service, scaled by an HPA and spread across zones, with an optional An
 for teams still running services on VMs. Helm owns the templates; a Kustomize overlay adds
 production-only scheduling and secret-checksum concerns on top of the same chart.
 
-```text
-                    ┌────────────────────────────┐
-                    │      Namespace: data-sync   │
-                    │                              │
-  Prometheus  <-----│  ServiceMonitor -> Service   │
-  (kube-prometheus-  │        │                     │
-   stack)            │        v                     │
-                    │   ┌───────────────┐            │
-                    │   │  Deployment    │  <--HPA----│-- metrics-server
-                    │   │  (data-sync)   │            │
-                    │   │  zone-a/b/c    │  <--PDB-----│
-                    │   └───────┬────────┘            │
-                    │           │                     │
-                    │           v                     │
-                    │      Redis (external           │
-                    │      to this chart)             │
-                    └────────────────────────────┘
+```mermaid
+flowchart LR
+    P[Prometheus] -- scrapes /metrics --> SVC
+    MS[metrics-server] -- pod CPU --> HPA
+    subgraph ns["Namespace: data-sync"]
+        SM[ServiceMonitor] -- names the scrape target --> SVC[Service, ClusterIP]
+        SVC --> DEP["Deployment: replicas across zone a/b/c"]
+        HPA[HPA] -- sets replica count --> DEP
+        PDB[PodDisruptionBudget] -- floors available replicas --> DEP
+    end
+    DEP --> R[(Redis, outside this chart)]
 ```
 
 ## Components
@@ -42,6 +36,21 @@ production-only scheduling and secret-checksum concerns on top of the same chart
 | Ansible role `be-data-sync` | Installs and deploys data-sync on an EL8 VM as a systemd unit | `ansible/roles/be-data-sync/` |
 
 ## Configuration flow
+
+Where each of the seven environment variables comes from:
+
+| Variable | Source | Set by |
+|---|---|---|
+| `APP_ENV` | ConfigMap | `config.appEnv` (chart rejects anything but staging or production) |
+| `REDIS_HOST` | ConfigMap | `config.redisHost`, per environment |
+| `REDIS_PORT` | ConfigMap | `config.redisPort` |
+| `LOG_LEVEL` | ConfigMap | `config.logLevel` |
+| `WORKERS` | ConfigMap | `config.workers` |
+| `MAX_CONNECTIONS` | ConfigMap | `config.maxConnections` |
+| `REDIS_PASSWORD` | Secret | `secret.redisPassword` at deploy time, or `secret.existingSecret` |
+
+The container gets the first six with `envFrom.configMapRef` and the last with a
+`secretKeyRef`, so the password never appears in the ConfigMap or in a values file in Git.
 
 Non-secret values flow: `values.yaml` defaults, overridden by an environment file
 (`values.staging.yaml` or `values.production.yaml`), overridden again by
@@ -90,7 +99,6 @@ secret change alone is enough to trigger a rolling update, with no separate rest
   runs with a stale password next to a rotated one.
 - **Check autoscaling**: `kubectl -n data-sync get hpa data-sync` and
   `kubectl -n data-sync top pods` (needs metrics-server).
-  Check pods are Ready.
 - **Check zone spread**: `kubectl -n data-sync get pods -o wide` and cross-reference each
   node's `topology.kubernetes.io/zone` label.
 - **Drain a node safely**: `kubectl drain <node> --ignore-daemonsets` respects the PDB;

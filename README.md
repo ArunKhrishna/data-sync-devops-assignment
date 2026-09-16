@@ -15,8 +15,11 @@ Kustomize production overlay, plus an Ansible role for the VM path.
 │   └── ARCHITECTURE.md             # architecture, NFRs, maintaining the repo
 ├── scripts/
 │   └── verify-kustomize.sh         # builds the overlay and checks the key fields
-├── helm/charts/data-sync/          # Helm chart: templates + values.yaml (default),
-│                                    # values.staging.yaml, values.production.yaml
+├── helm/charts/data-sync/          # Helm chart: the only place templates are defined
+│   ├── templates/                  # Deployment, Service, ConfigMap, Secret, HPA, PDB, ServiceMonitor
+│   ├── values.yaml                 # safe defaults, used by every environment as the base
+│   ├── values.staging.yaml         # staging overrides
+│   └── values.production.yaml      # production overrides
 ├── standard/data-sync/             # Kustomize, built with --enable-helm; see below
 │   ├── base/                       # renders the Helm chart above, adds nothing itself
 │   └── production/                 # patches base's output: zone spread, SECRET_CHECKSUM
@@ -197,6 +200,14 @@ and the ServiceMonitor wiring.
 
 ## Assumptions and shortcuts
 
+The brief asks for real-world shortcuts to be called out here. These are the ones taken, plus
+the one place this repo deliberately departs from the brief's wording.
+
+- Production sets a strict memory limit (`2Gi`, equal to the request) but deliberately sets no
+  CPU limit, where the brief says "strict resource limits". CPU is compressible and a CPU
+  limit throttles via CFS quota even on an idle node, which is the wrong trade for a
+  latency-sensitive service; this follows GKE's own guidance. Full reasoning and the
+  trade-off accepted (Burstable instead of Guaranteed QoS) are in `docs/DECISIONS.md` #5.
 - "Part 4" in the brief is read as the written design (Part 3).
 - The kustomization path is `standard/data-sync/production/`.
 - The image repository, Redis hosts and app repo URL are placeholders.
