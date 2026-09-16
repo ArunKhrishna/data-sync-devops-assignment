@@ -104,6 +104,16 @@
      hardcoding pairwise rules; anti-affinity rules grow unwieldy past a handful of replicas.
    - Trade-off: `DoNotSchedule` can leave pods Pending if a zone is briefly out of capacity;
      accepted because losing schedulability is safer than losing the spread guarantee.
+   - Trade-off, where the constraint lives: the brief assigns the zone spread to the
+     production Kustomize overlay, so it ships as a patch there and not in
+     `values.production.yaml`, even though the chart exposes `topologySpreadConstraints` as a
+     values key. The cost is that the two production paths are not interchangeable: the
+     Helm-only path in the README deploys without zone spread and without `SECRET_CHECKSUM`.
+     Setting the constraint in the values file as well would close that gap, but it would
+     also make the overlay patch a no-op duplicate and leave two places to edit with no way
+     to tell which one is authoritative. The README labels the difference instead, and
+     `test/minikube/values.minikube.yaml` sets the same rule through values so the Helm-only
+     path can still be smoke-tested for zone spread locally.
 
 8. **PodDisruptionBudget presence**
    - Chosen: `pdb.enabled: true` with `minAvailable` by default.

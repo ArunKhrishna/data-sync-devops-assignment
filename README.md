@@ -97,7 +97,7 @@ git checkout standard/data-sync/base/secret-values.yaml   # never commit the rea
 The `printf` form assumes a generated password without quotes or backslashes. Run this step
 in a throwaway pipeline workspace, not on a shared checkout.
 
-**Option B, Helm only (no overlay patches):**
+**Option B, Helm only (no zone spread, no `SECRET_CHECKSUM`, see `docs/DECISIONS.md` #7):**
 
 ```bash
 export REDIS_PASSWORD='<from Secret Manager>'
