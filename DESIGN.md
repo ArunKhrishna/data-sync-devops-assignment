@@ -3,27 +3,38 @@
 ## Scaling strategy
 
 The chart scales data-sync with a `HorizontalPodAutoscaler` (`autoscaling/v2`) on CPU
-utilization, gated behind `autoscaling.enabled` so staging can stay on a fixed
-`replicaCount` while production runs `minReplicas: 3` to `maxReplicas: 20` at 50 percent CPU
-target. `replicas` is omitted from the Deployment whenever autoscaling is on, so Helm never
-fights the HPA over the field on every `upgrade`. Requests equal limits in production
-(`cpu: "2"`, `memory: 2Gi`), giving every pod Guaranteed QoS: the kubelet will not throttle or
-evict data-sync ahead of lower-priority workloads, and the HPA's CPU percentage means what it
-says because there is no burst headroom hiding above the request.
+utilization: staging stays on a fixed `replicaCount`, production runs `minReplicas: 3` to
+`maxReplicas: 20` at 70 percent CPU with requests equal to limits (`cpu: "2"`, `memory: 2Gi`)
+for Guaranteed QoS, so 70 percent means what it says with no burst headroom above the
+request. Scale-up reacts within 15 seconds (a large percent-based step); scale-down is
+deliberately slow (5-minute stabilization), so a brief spike does not thrash pods up and
+back down.
 
-Production sets asymmetric scaling behavior: scale-up reacts in under a minute (a short
-stabilization window, a large percent-based step), scale-down is deliberately slow (a long
-stabilization window, a small step), so a brief traffic spike does not thrash pods up and
-immediately back down. `PodDisruptionBudget` (`minAvailable`) and topology spread
-(`maxSkew: 1`, zone `topologyKey`, `whenUnsatisfiable: DoNotSchedule`) sit underneath the HPA
-so that scaling and voluntary disruption never drop capacity below what one zone failure
-should be able to absorb.
+CPU-based HPA alone cannot reliably get scale-out under 20 seconds: the metrics-server poll
+interval (about 15 seconds) plus image pull and startup-probe time puts a floor around 30 to
+90 seconds, since the HPA cannot react to load it has not measured yet. Two changes close
+that gap for the 2,000 req/s burst in the scenario:
+
+- **Pre-warm the floor.** Raise `minReplicas` to steady-state peak traffic, so bursts are
+  absorbed by already-Ready pods instead of waiting on the scale-out path. Cost: idle
+  capacity paid for around the clock.
+- **Scale on a leading indicator with KEDA.** Add a KEDA `ScaledObject` next to the HPA,
+  scaling on request rate or Redis queue depth instead of CPU. Those metrics rise before CPU
+  does, since a queued request uses little CPU until a worker picks it up, so KEDA reacts to
+  the cause of the burst, not its downstream effect. Cost: another operator and metrics
+  pipeline to keep healthy, and a second scaling signal to reason about.
+
+Together: pre-warmed `minReplicas` absorbs the first seconds, KEDA covers the rest of the
+ramp, and CPU-based HPA remains the fallback if the metrics pipeline is down.
 
 ```mermaid
 flowchart LR
     A[Prometheus scrapes /metrics] --> B[metrics-server: pod CPU]
-    B --> C{HPA: CPU vs 50% target}
+    A --> H[KEDA: RPS / queue depth]
+    B --> C{HPA: CPU vs 70% target}
+    H --> I{KEDA: leading-indicator threshold}
     C -- above target --> D[Scale up, fast]
+    I -- above threshold --> D
     C -- below target --> E[Scale down, slow]
     D --> F[New pods spread across zones]
     E --> F
@@ -32,22 +43,25 @@ flowchart LR
 
 ## Workload isolation
 
-Isolation runs on three axes: identity, filesystem, and blast radius. The container runs as
-a fixed non-root UID with `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`,
-all Linux capabilities dropped, and a `RuntimeDefault` seccomp profile; the only writable
-path is an `emptyDir` mounted at `/tmp`. The ServiceAccount has
-`automountServiceAccountToken: false`, since data-sync never calls the Kubernetes API. None
-of this is defense against a specific known exploit; it is the standard baseline that removes
-whole exploit classes (privilege escalation, root-owned file tampering, credential theft from
-a mounted token) at negligible cost.
+For the ClickHouse noisy-neighbor case, isolation starts with scheduling, not security
+hardening. Taint the nodes ClickHouse runs on with something like
+`workload=analytics:NoSchedule`; give data-sync a matching `toleration` only where it should
+share a node, and `nodeAffinity`/`nodeSelector` (already chart values, currently empty) to
+pin it elsewhere. A `priorityClassName` above ClickHouse's own means the kubelet evicts the
+batch workload first under real node pressure, not the request-serving one. A namespace-level
+`ResourceQuota` and `LimitRange` back this up so no workload can request past what a node
+actually has.
 
-Blast radius is bounded at the scheduling layer. Topology spread constraints keep replicas
-across zones instead of letting the scheduler pack them onto whichever nodes are free, so one
-zone's outage removes at most a third of the fleet rather than all of it. The PDB then stops
-cluster maintenance (node drains, cluster upgrades) from removing more replicas than that on
-top of a real outage. Requests and limits keep one pod from starving its neighbors on a
-shared node; per-environment `values.yaml` files keep staging and production fully separate
-releases, namespaces and Secrets, so a bad staging config change has no path to production.
+Requests equal to limits (Guaranteed QoS) also stop data-sync from being throttled or evicted
+first if ClickHouse bursts past its own limits. Topology spread bounds blast radius the same
+way: replicas land across zones instead of piling onto free nodes, so a zone outage removes
+at most a third of the fleet, and the PDB stops maintenance from taking more than that on top
+of a real outage.
+
+Decision rule for a **dedicated node pool**: stay on tainted shared nodes while taints,
+priority classes and quotas keep p99 latency stable. Move once contention still shows up in
+p99 despite that, or once data-sync's own footprint makes paying for its own idle headroom
+cheaper than the latency risk of sharing.
 
 ```text
 Zone A            Zone B            Zone C
@@ -62,21 +76,27 @@ Zone A            Zone B            Zone C
 
 ## Zero-downtime secret rotation
 
-Kubernetes never restarts a Deployment just because a mounted Secret changed, so a naive
-rotation edits the Secret and the running pods keep the old value in memory indefinitely. The
-chart closes that gap with a checksum annotation: `deployment.yaml` sets
-`checksum/config` and `checksum/secret` on the pod template from a SHA-256 of the rendered
-ConfigMap and Secret. Helm only computes SHA-256 at template time, so the Kustomize overlay
-cannot copy the hash function; instead its `replacements` block copies the already-rendered
-`checksum/secret` annotation into a second `SECRET_CHECKSUM` annotation on the same pod
-template, which is enough to prove the value tracks the Secret through the overlay too.
+The new password arrives the same way the first one did: pulled from Secret Manager by the
+deploy pipeline and passed with `--set-string secret.redisPassword=...`, or synced into an
+`existingSecret` by External Secrets Operator on a 90-day schedule. No plaintext is ever
+committed.
 
-Because the annotation lives on the pod template, not the Deployment's own metadata, changing
-it changes the template hash, which is exactly what triggers a normal Kubernetes rolling
-update: new pods with the new Secret value start first, pass their readiness probe, and only
-then do old pods terminate, respecting `maxUnavailable` the whole way. No pod is ever running
-with a mixed or stale Secret and no traffic gap opens up, because the Service keeps routing to
-whichever pods are Ready throughout.
+Kubernetes never restarts a Deployment when a mounted Secret changes, so editing the Secret
+alone leaves running pods holding the old value. The chart closes that gap with a checksum
+annotation: `deployment.yaml` sets `checksum/config` and
+`checksum/secret` on the pod template from a SHA-256 of the rendered ConfigMap and Secret.
+Helm only computes that hash at template time, so the Kustomize overlay's `replacements`
+block instead copies the already-rendered `checksum/secret` annotation into a second
+`SECRET_CHECKSUM` annotation on the same pod template, proving the value tracks the Secret
+through the overlay too.
+
+Because the annotation lives on the pod template, changing it changes the template hash,
+triggering a normal rolling update: new pods with the new value start first, pass readiness,
+and only then do old pods terminate, respecting `maxUnavailable`. No pod runs with a stale
+Secret and no traffic gap opens, since the Service only routes to Ready pods. To verify:
+`kubectl rollout status` reaches "successfully rolled out", `kubectl -n data-sync get pods`
+shows only new pods left with none in `CrashLoopBackOff`, and the Prometheus error-rate panel
+for data-sync stays flat throughout.
 
 ```mermaid
 sequenceDiagram

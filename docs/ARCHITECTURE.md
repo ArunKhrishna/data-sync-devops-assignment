@@ -60,7 +60,7 @@ secret change alone is enough to trigger a rolling update, with no separate rest
 | Replicas | 1, fixed | 2, fixed | 3 to 20, HPA-managed |
 | Log level | DEBUG | INFO | INFO |
 | Resources | requests below limits | requests below limits | requests equal limits |
-| Autoscaling | off | off | on, 50% CPU target |
+| Autoscaling | off | off | on, 70% CPU target |
 | PDB | on, minAvailable default | on | on |
 | Zone spread | off (chart default) | off | on, via Kustomize overlay |
 | Deploy path | n/a | Helm | Helm or Kustomize (not both) |
