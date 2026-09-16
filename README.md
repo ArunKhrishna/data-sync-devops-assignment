@@ -203,12 +203,12 @@ and the ServiceMonitor wiring.
 
 The brief asks for real-world shortcuts to be called out here. These are the ones taken.
 
-- Production memory `requests == limits`, but the CPU limit (`4`) sits above the CPU request
-  (`2`) rather than matching it, so bursts are not CFS-throttled at steady state while a
-  runaway process is still capped. Reasoning in `docs/DECISIONS.md` #5.
 - "Part 4" in the brief is read as the written design (Part 3).
-- The kustomization path is `standard/data-sync/production/`.
+- The brief names only the production kustomization, so `standard/data-sync/base/` is this
+  repo's own layer: it renders the chart, and production patches that output.
 - The image repository, Redis hosts and app repo URL are placeholders.
+- The systemd unit assumes the app starts with `uvicorn app.main:app`. Override
+  `data_sync_exec_start` if the real entrypoint differs.
 - No Redis subchart. Bitnami moved its free versioned images to the unmaintained
   `bitnamilegacy` repo in 2025, so a test-only Redis manifest is used locally instead.
 - The ServiceMonitor needs kube-prometheus-stack installed with release name
