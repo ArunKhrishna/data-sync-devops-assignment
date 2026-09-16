@@ -11,8 +11,6 @@ helmCharts:
     releaseName: data-sync
     namespace: data-sync
     valuesFile: ../../../helm/charts/data-sync/values.production.yaml
-    # secret-values.yaml is a Helm values file, the same input --set-string would give
-    # helm install. It does not define a Secret resource; Helm's own secret.yaml template
-    # still creates the actual Kubernetes Secret, using the password value from this file.
+    # A Helm values file, not a Secret resource; secret.yaml still creates the real Secret.
     additionalValuesFiles:
       - secret-values.yaml

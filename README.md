@@ -15,14 +15,15 @@ Kustomize production overlay, plus an Ansible role for the VM path.
 │   └── ARCHITECTURE.md             # architecture, NFRs, maintaining the repo
 ├── scripts/
 │   └── verify-kustomize.sh         # builds the overlay and checks the key fields
-├── helm/charts/data-sync/          # Helm chart
-├── standard/data-sync/
-│   ├── base/                       # chart rendered by kustomize
-│   └── production/                 # production overlay
-├── ansible/                        # Ansible role, playbook, group_vars
-└── test/
-    ├── stub-app/                   # tiny FastAPI app for Minikube only
-    └── minikube/                   # Minikube values and test Redis
+├── helm/charts/data-sync/          # Helm chart: templates + values.yaml (default),
+│                                    # values.staging.yaml, values.production.yaml
+├── standard/data-sync/             # Kustomize, built with --enable-helm; see below
+│   ├── base/                       # renders the Helm chart above, adds nothing itself
+│   └── production/                 # patches base's output: zone spread, SECRET_CHECKSUM
+├── ansible/                        # Ansible role, playbook, group_vars: VM deploy path
+└── test/                           # Minikube-only scaffolding, not part of the deliverable
+    ├── stub-app/                   # tiny FastAPI app standing in for the real data-sync image
+    └── minikube/                   # test-only Redis (Minikube has no managed Redis)
 ```
 
 The assignment's `playbooks/` and `group_vars/` paths live under `ansible/`
@@ -69,8 +70,14 @@ helm upgrade --install data-sync helm/charts/data-sync \
 
 ## Deploy to production
 
-Two options. Only one should manage a given environment. Helm and `kubectl apply` must not
-both manage the same resources.
+Both options deploy the exact same chart. Kustomize does not define its own Deployment or
+Secret; `helmCharts` renders this Helm chart first, then Kustomize's `patches` add zone spread
+and its `replacements` add the `SECRET_CHECKSUM` annotation on top of that same output.
+Staging skips Kustomize because it runs a fixed 2 replicas on one assumed zone, so neither
+patch applies; production runs 3-20 HPA-managed replicas across zones, where they do.
+
+Pick one option per environment. Helm and `kubectl apply` must not both manage the same
+resources.
 
 **Option A, Kustomize overlay (recommended, adds zone spread and `SECRET_CHECKSUM`):**
 
@@ -99,16 +106,21 @@ helm upgrade --install data-sync helm/charts/data-sync \
 
 ## Upgrade and rollback
 
-`helm upgrade` is the same command as install. To roll back:
+Rollback depends on which option deployed the release: `kubectl apply` (Option A) creates no
+Helm release, so `helm rollback` has nothing to act on there.
+
+**Option B (Helm):** `helm upgrade` is the same command as install. To roll back:
 
 ```bash
 helm history data-sync -n data-sync
 helm rollback data-sync <REVISION> -n data-sync
 ```
 
-For the Kustomize path, revert the Git change to `standard/data-sync/production` and
-re-apply. In an emergency, `kubectl -n data-sync rollout undo deploy/data-sync` reverts the
-Deployment directly, regardless of which path deployed it.
+**Option A (Kustomize):** revert the Git change to `standard/data-sync/production` and
+re-apply the same `kustomize build | kubectl apply` command.
+
+**Either path, in an emergency:** `kubectl -n data-sync rollout undo deploy/data-sync` reverts
+the Deployment directly, since it acts on the live object, not on how it got there.
 
 ## Values reference
 
@@ -124,6 +136,10 @@ Deployment directly, regardless of which path deployed it.
 | `secret.existingSecret` | "" (chart creates the Secret) | "" | "" |
 
 ## Ansible
+
+The brief also asks for a VM deploy path, for hosts that run data-sync outside Kubernetes
+entirely. This role installs the app (Python venv, systemd unit) and deploys code updates to
+one of those hosts; it does not touch the cluster or the Helm/Kustomize path above.
 
 Setup, once:
 
