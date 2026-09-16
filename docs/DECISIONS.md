@@ -22,11 +22,18 @@
      (Kustomize output); others are comfortable with Helm hooks and history.
    - Trade-off: two paths mean the README must warn against running both against the same
      namespace at once.
-   - Note: "Helm templates, Kustomize patches the result" is a supported upstream pattern, not
-     a local invention. Helm ships `--post-renderer` and names Kustomize as the example, and
-     Flux's `HelmRelease` has a first-class `.spec.postRenderers[].kustomize` field taking
-     `patches` and `images`. This repo reaches the same result from the Kustomize side
-     (`helmCharts`), which is the shape the brief asks for.
+   - Note: "Helm templates, Kustomize patches the result" is a supported upstream pattern.
+     Helm ships `--post-renderer` and names Kustomize as the example; Flux's `HelmRelease`
+     has a first-class `.spec.postRenderers[].kustomize` field. Those are the blessed
+     mechanisms. This repo instead drives it from the Kustomize side with `helmCharts`,
+     because that is the shape the brief asks for, and that path is weaker: the Kustomize
+     reference calls `helmCharts` "limited support ... intended to be a limited subset of
+     helm features to help with getting started", and Argo CD does not pass `--enable-helm`
+     by default, so enabling it means a plugin or an instance-wide `kustomize.buildOptions`.
+     On a greenfield repo the overlay would not earn its place at all: the chart is
+     first-party, so `topologySpreadConstraints` is already a values key and the zone spread
+     could ship from `values.production.yaml` with no Kustomize involved. Post-rendering
+     would be the choice if the constraint were dropped.
 
 3. **Secret checksum propagation into Kustomize**
    - Chosen: a `replacements` block copying the rendered `checksum/secret` annotation to a
