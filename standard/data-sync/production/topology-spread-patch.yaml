@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-sync
+spec:
+  template:
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          # Must match the chart selector labels.
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: data-sync
+              app.kubernetes.io/instance: data-sync
+          # Count only pods of the current ReplicaSet, so rollouts do not skew the spread.
+          matchLabelKeys:
+            - pod-template-hash

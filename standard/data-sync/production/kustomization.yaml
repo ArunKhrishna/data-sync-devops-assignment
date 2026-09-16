@@ -1,0 +1,33 @@
+# Production overlay for data-sync.
+# Build:
+#   kustomize build --enable-helm --load-restrictor LoadRestrictionsNone standard/data-sync/production
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: data-sync
+
+resources:
+  - ../base
+
+patches:
+  # Spread pods evenly across GCP zones.
+  - path: topology-spread-patch.yaml
+    target:
+      kind: Deployment
+      name: data-sync
+
+# Kustomize cannot hash a Secret, so reuse the hash Helm already computed.
+# Any change to the Secret changes SECRET_CHECKSUM and rolls the pods.
+replacements:
+  - source:
+      kind: Deployment
+      name: data-sync
+      fieldPath: spec.template.metadata.annotations.checksum/secret
+    targets:
+      - select:
+          kind: Deployment
+          name: data-sync
+        fieldPaths:
+          - spec.template.metadata.annotations.SECRET_CHECKSUM
+        options:
+          create: true

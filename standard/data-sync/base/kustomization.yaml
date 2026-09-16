@@ -1,0 +1,15 @@
+# Renders the Helm chart with production values. The production overlay builds on top of this.
+# Build needs: --enable-helm --load-restrictor LoadRestrictionsNone (the chart lives outside this folder).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+helmGlobals:
+  chartHome: ../../../helm/charts
+
+helmCharts:
+  - name: data-sync
+    releaseName: data-sync
+    namespace: data-sync
+    valuesFile: ../../../helm/charts/data-sync/values.production.yaml
+    additionalValuesFiles:
+      - secret-values.yaml
