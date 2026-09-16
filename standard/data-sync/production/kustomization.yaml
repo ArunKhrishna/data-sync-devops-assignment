@@ -1,4 +1,6 @@
 # Production overlay for data-sync.
+# `--enable-helm` makes ../base run the Helm chart first; everything below patches that
+# same rendered Deployment, not a second one this file defines.
 # Build:
 #   kustomize build --enable-helm --load-restrictor LoadRestrictionsNone standard/data-sync/production
 apiVersion: kustomize.config.k8s.io/v1beta1
