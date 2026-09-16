@@ -17,6 +17,7 @@
 {{- end }}
 {{- end }}
 
+{{/* Chart name and version, used in the helm.sh/chart label. */}}
 {{- define "data-sync.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
@@ -35,6 +36,7 @@ app.kubernetes.io/name: {{ include "data-sync.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
+{{/* Resolves the ServiceAccount name from the serviceAccount.create/name toggles. */}}
 {{- define "data-sync.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
 {{- default (include "data-sync.fullname" .) .Values.serviceAccount.name }}

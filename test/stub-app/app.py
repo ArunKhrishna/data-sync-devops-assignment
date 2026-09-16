@@ -1,4 +1,9 @@
-"""Stand-in for data-sync, used only for local Minikube tests."""
+"""Stand-in for data-sync, used only for local Minikube tests.
+
+Only proves the Deployment/ConfigMap/Secret wiring (env vars land in the
+pod, /health and /metrics respond). It never opens a Redis connection, so
+it does not prove data-sync's actual Redis usage works.
+"""
 import os
 
 from fastapi import FastAPI, Response
