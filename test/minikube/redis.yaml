@@ -1,0 +1,48 @@
+# Test-only Redis for Minikube. Reads the password from the chart Secret,
+# so apply this after the Helm release exists.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-master
+  namespace: data-sync
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-master
+  template:
+    metadata:
+      labels:
+        app: redis-master
+    spec:
+      containers:
+        - name: redis
+          image: redis:8.8.2-alpine
+          args: ["--requirepass", "$(REDIS_PASSWORD)"]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: data-sync
+                  key: REDIS_PASSWORD
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-master
+  namespace: data-sync
+spec:
+  selector:
+    app: redis-master
+  ports:
+    - port: 6379
+      targetPort: 6379

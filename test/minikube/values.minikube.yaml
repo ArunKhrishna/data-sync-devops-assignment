@@ -1,0 +1,39 @@
+# Local Minikube overrides. Apply after values.staging.yaml.
+
+image:
+  repository: data-sync-stub
+  tag: local
+  pullPolicy: Never  # image is built inside Minikube
+
+config:
+  redisHost: redis-master.data-sync.svc.cluster.local
+
+secret:
+  redisPassword: local-dev-only
+
+# Small requests so CPU load triggers the HPA quickly.
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 128Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 50
+
+# Same rule as the production overlay. Nodes need fake zone labels (see README).
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: data-sync
+        app.kubernetes.io/instance: data-sync
+    matchLabelKeys:
+      - pod-template-hash
