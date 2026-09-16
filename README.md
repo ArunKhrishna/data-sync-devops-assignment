@@ -23,7 +23,10 @@ Kustomize production overlay, plus an Ansible role for the VM path.
 ├── standard/data-sync/             # Kustomize, built with --enable-helm; see below
 │   ├── base/                       # renders the Helm chart above, adds nothing itself
 │   └── production/                 # patches base's output: zone spread, SECRET_CHECKSUM
-├── ansible/                        # Ansible role, playbook, group_vars: VM deploy path
+├── ansible/                        # VM deploy path, see the Ansible section below
+│   ├── playbooks/                  # playbook-data-sync.yml
+│   ├── group_vars/                 # service.yml
+│   └── roles/be-data-sync/         # tasks, handlers, templates, defaults, meta
 └── test/                           # Minikube-only scaffolding, not part of the deliverable
     ├── stub-app/                   # tiny FastAPI app standing in for the real data-sync image
     └── minikube/                   # test-only Redis (Minikube has no managed Redis)
@@ -148,6 +151,29 @@ The brief also asks for a VM deploy path, for hosts that run data-sync outside K
 entirely. This role installs the app (Python venv, systemd unit) and deploys code updates to
 one of those hosts; it does not touch the cluster or the Helm/Kustomize path above.
 
+```text
+ansible/
+├── ansible.cfg                     # makes this directory the Ansible root
+├── .ansible-lint                   # production profile, one documented skip
+├── inventory.ini                   # example hosts, each with be_role=service
+├── requirements.txt                # pinned ansible-core and ansible-lint
+├── group_vars/
+│   └── service.yml                 # app env, redis host and log level for the group
+├── playbooks/
+│   └── playbook-data-sync.yml      # targets the service group, tags install and deploy
+└── roles/be-data-sync/
+    ├── defaults/main.yml           # role variables, overridden by group_vars
+    ├── handlers/main.yml           # restarts the service when config changes
+    ├── meta/main.yml               # role metadata, EL8 platform
+    ├── tasks/main.yml              # default entry point: install then deploy
+    ├── tasks/install.yml           # python39, pip, git, app user, /srv/data-sync
+    ├── tasks/deploy.yml            # clone repo, build venv, systemd unit, start
+    └── templates/data-sync.service.j2
+```
+
+The two task files are split so `--tags install` and `--tags deploy` can run independently.
+Both are guarded by `be_role == 'service'`, so the role is a no-op on any other host.
+
 Setup, once:
 
 ```bash
@@ -206,7 +232,9 @@ and the ServiceMonitor wiring.
 
 The brief asks for real-world shortcuts to be called out here. These are the ones taken.
 
-- "Part 4" in the brief is read as the written design (Part 3).
+- The brief's tips say to prioritise "Part 1 and Part 4", but the brief has only three parts.
+  Read as Part 3, the written design, since the same sentence calls out the Helm chart and
+  the written design as the two things that matter most.
 - The brief names only the production kustomization, so `standard/data-sync/base/` is this
   repo's own layer: it renders the chart, and production patches that output.
 - The image repository, Redis hosts and app repo URL are placeholders.
