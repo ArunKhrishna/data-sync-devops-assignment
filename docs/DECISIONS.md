@@ -47,23 +47,25 @@
      someone pointing the staging values file at the production namespace by mistake.
 
 5. **Asymmetric CPU/memory resource shape in production**
-   - Chosen: memory `requests == limits`; CPU gets a request but no limit.
-   - Alternatives: `requests == limits` on both (Guaranteed QoS); requests below limits on
-     both, relying on the HPA alone for headroom.
-   - Why: CPU and memory fail differently. Memory is incompressible: going over the limit is
-     an OOM kill, so `requests == limits` just removes the surprise, at no cost. CPU is
-     compressible: a CPU limit is enforced by the kernel's CFS quota every 100ms regardless
-     of whether the node has idle CPU, so `limit == request` guarantees throttling on every
-     burst above steady state (startup, GC, traffic spikes), which is the wrong trade for a
-     latency-sensitive service. This is GKE's own stated guidance for such workloads, not a
-     project-specific opinion. The HPA's CPU target percentage is computed against the
-     request either way; it does not depend on whether a limit exists.
-   - Trade-off: the pod is Burstable QoS, not Guaranteed, so it is not the kubelet's
-     last-choice eviction candidate under generic node memory pressure. Isolation from a
-     specific noisy neighbor (ClickHouse) is carried by `priorityClassName`, taints and
-     `ResourceQuota`/`LimitRange` instead of by QoS class; see DESIGN.md's workload isolation
-     section. A CPU-heavy pod on this node could also consume idle CPU other pods might have
-     used, though only up to what the node actually has free.
+   - Chosen: memory `requests == limits` (2Gi); CPU request 2 with the limit at 4.
+   - Alternatives: `requests == limits` on both (Guaranteed QoS); a CPU request with no CPU
+     limit at all.
+   - Why: CPU and memory fail differently. Memory is incompressible, so going over the limit
+     is an OOM kill; `requests == limits` removes the surprise at no cost. CPU is
+     compressible, and a CPU limit is enforced by the kernel's CFS quota in roughly 100ms
+     windows regardless of whether the node has idle CPU. That means `limit == request`
+     throttles every burst above steady state (startup, GC, traffic spikes), which is the
+     wrong trade for a latency-sensitive service. Putting the limit at twice the request
+     keeps that burst headroom while still capping a runaway process, which is what a limit
+     is for. The HPA's CPU target is computed against the request, so the limit does not
+     move the scaling maths either way.
+   - Trade-off: the pod is Burstable QoS, not Guaranteed, since only memory has matching
+     request and limit. It is therefore not the kubelet's last-choice eviction candidate
+     under generic node memory pressure. Isolation from a specific noisy neighbour
+     (ClickHouse) is carried by `priorityClassName`, taints and `ResourceQuota`/`LimitRange`
+     instead of by QoS class; see DESIGN.md's workload isolation section. Bursting to 4 CPUs
+     also means two busy pods on one node can contend, which the topology spread and the
+     dedicated node pool decision are there to bound.
 
 6. **HPA scaling behavior**
    - Chosen: explicit `behavior.scaleUp` (fast) and `behavior.scaleDown` (slow) policies in

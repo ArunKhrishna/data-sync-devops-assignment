@@ -4,8 +4,8 @@
 
 The chart scales data-sync with a `HorizontalPodAutoscaler` (`autoscaling/v2`) on CPU
 utilization: staging stays on a fixed `replicaCount`, production runs `minReplicas: 3` to
-`maxReplicas: 20` at 70 percent CPU, computed against the CPU *request* (`cpu: "2"`), not a
-limit; production sets no CPU limit (`docs/DECISIONS.md` #5). Scale-up reacts within 15
+`maxReplicas: 20` at 70 percent CPU, computed against the CPU *request* (`cpu: "2"`), never
+the limit (`cpu: "4"`, `docs/DECISIONS.md` #5). Scale-up reacts within 15
 seconds (a large percent-based step); scale-down is deliberately slow (5-minute
 stabilization), so a brief spike does not thrash pods up and back down.
 
@@ -55,8 +55,8 @@ batch workload first under real node pressure, not the request-serving one. A na
 actually has.
 
 Memory `requests == limits` still protects data-sync from eviction if ClickHouse's memory use
-pushes the node into pressure; data-sync carries no CPU limit (`docs/DECISIONS.md` #5), so
-CPU-side protection comes from the taint and priority class above, not QoS class. Topology
+pushes the node into pressure; the CPU limit sits above the request (`docs/DECISIONS.md` #5),
+so CPU-side protection comes from the taint and priority class above, not QoS class. Topology
 spread bounds blast radius the same way: replicas land
 across zones instead of piling onto free nodes, so a zone outage removes at most a third of
 the fleet, and the PDB stops maintenance from taking more than that on top of a real outage.

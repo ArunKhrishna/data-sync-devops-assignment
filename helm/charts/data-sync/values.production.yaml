@@ -10,14 +10,14 @@ secret:
   # or point existingSecret at a Secret synced from Secret Manager.
   redisPassword: CHANGE_ME
 
-# No CPU limit: avoids CFS throttling on bursts. Memory limit == request:
-# memory has no throttle, only OOM. See docs/DECISIONS.md #5.
+# CPU limit above request: burst headroom without CFS throttling at steady
+# state. Memory limit == request: memory has no throttle, only OOM.
 resources:
   requests:
     cpu: "2"
     memory: 2Gi
   limits:
-    cpu: null  # null, not absent, or Helm merge refills it from values.yaml
+    cpu: "4"
     memory: 2Gi
 
 preStopSleepSeconds: 10

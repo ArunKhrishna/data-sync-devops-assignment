@@ -134,7 +134,7 @@ the Deployment directly, since it acts on the live object, not on how it got the
 | `config.redisHost` | `redis-master.data-sync.svc.cluster.local` | `redis-staging.data-sync.internal` | `redis-prod.data-sync.internal` |
 | `autoscaling.enabled` | false | false | true |
 | `autoscaling.minReplicas`/`maxReplicas` | 1 / 3 | n/a | 3 / 20 |
-| `resources.requests`/`limits` | 100m/128Mi, 500m/256Mi | 250m/512Mi, 1/1Gi | cpu 2/none, memory 2Gi/2Gi (no CPU limit, see `docs/DECISIONS.md` #5) |
+| `resources.requests`/`limits` | 100m/128Mi, 500m/256Mi | 250m/512Mi, 1/1Gi | cpu 2/4, memory 2Gi/2Gi (see `docs/DECISIONS.md` #5) |
 | `serviceMonitor.enabled` | true | true | true |
 | `secret.existingSecret` | "" (chart creates the Secret) | "" | "" |
 
@@ -200,14 +200,11 @@ and the ServiceMonitor wiring.
 
 ## Assumptions and shortcuts
 
-The brief asks for real-world shortcuts to be called out here. These are the ones taken, plus
-the one place this repo deliberately departs from the brief's wording.
+The brief asks for real-world shortcuts to be called out here. These are the ones taken.
 
-- Production sets a strict memory limit (`2Gi`, equal to the request) but deliberately sets no
-  CPU limit, where the brief says "strict resource limits". CPU is compressible and a CPU
-  limit throttles via CFS quota even on an idle node, which is the wrong trade for a
-  latency-sensitive service; this follows GKE's own guidance. Full reasoning and the
-  trade-off accepted (Burstable instead of Guaranteed QoS) are in `docs/DECISIONS.md` #5.
+- Production memory `requests == limits`, but the CPU limit (`4`) sits above the CPU request
+  (`2`) rather than matching it, so bursts are not CFS-throttled at steady state while a
+  runaway process is still capped. Reasoning in `docs/DECISIONS.md` #5.
 - "Part 4" in the brief is read as the written design (Part 3).
 - The kustomization path is `standard/data-sync/production/`.
 - The image repository, Redis hosts and app repo URL are placeholders.
