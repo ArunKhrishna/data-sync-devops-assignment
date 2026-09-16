@@ -100,6 +100,7 @@ in a throwaway pipeline workspace, not on a shared checkout.
 **Option B, Helm only (no overlay patches):**
 
 ```bash
+export REDIS_PASSWORD='<from Secret Manager>'
 helm upgrade --install data-sync helm/charts/data-sync \
   --namespace data-sync --create-namespace \
   -f helm/charts/data-sync/values.production.yaml \

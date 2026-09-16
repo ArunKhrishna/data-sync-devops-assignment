@@ -22,9 +22,12 @@ flowchart LR
 
 ## Components
 
+Chart paths below are relative to `helm/charts/data-sync/`; everything else is from the repo
+root.
+
 | Component | Purpose | Where |
 |---|---|---|
-| Deployment | Runs the data-sync container, probes, security context | `helm/charts/data-sync/templates/deployment.yaml` |
+| Deployment | Runs the data-sync container, probes, security context | `templates/deployment.yaml` |
 | Service | Stable ClusterIP for the pods | `templates/service.yaml` |
 | ConfigMap | Non-secret runtime config (`APP_ENV`, `REDIS_HOST`, etc.) | `templates/configmap.yaml` |
 | Secret | `REDIS_PASSWORD`, created by the chart or referenced via `existingSecret` | `templates/secret.yaml` |
