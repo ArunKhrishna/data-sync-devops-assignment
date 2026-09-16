@@ -1,5 +1,6 @@
 ---
-# Required settings. Override these in group_vars.
+# Per-environment settings. These defaults are safe for local testing;
+# group_vars/service.yml overrides them for real hosts.
 data_sync_app_env: staging
 data_sync_redis_host: localhost
 data_sync_log_level: INFO
