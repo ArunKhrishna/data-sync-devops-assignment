@@ -8,6 +8,11 @@
      context, HPA gating) belongs in one place, not duplicated across two systems.
    - Trade-off: the overlay needs a Helm binary at build time and a kustomize new enough to
      support `helmCharts` (v5.8.1+).
+   - Note: kustomize-sigs' own docs advise against `helmCharts` in production, favoring a
+     committed, human-rebased render instead. That warning targets third-party charts pulled
+     from an external registry; ours is first-party and already reviewed in this repo. A
+     static snapshot would also break secret rotation, since the checksum annotation needs a
+     fresh render on every deploy to catch the current secret value. Kept live rendering.
 
 2. **Kustomize vs Helm for production**
    - Chosen: document both as valid paths, recommend Kustomize for the zone spread patch and
