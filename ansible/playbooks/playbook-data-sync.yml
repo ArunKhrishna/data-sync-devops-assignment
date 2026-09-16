@@ -1,0 +1,22 @@
+---
+# Usage (from the ansible/ directory):
+#   ansible-playbook playbooks/playbook-data-sync.yml                 # install + deploy
+#   ansible-playbook playbooks/playbook-data-sync.yml --tags deploy   # code/config update only
+- name: Deploy data-sync to service hosts
+  hosts: service
+  become: true
+
+  tasks:
+    # Separate imports keep the tags independent. Tagging the whole role
+    # would give every task both tags.
+    - name: Install data-sync prerequisites
+      ansible.builtin.import_role:
+        name: be-data-sync
+        tasks_from: install
+      tags: [install]
+
+    - name: Deploy data-sync
+      ansible.builtin.import_role:
+        name: be-data-sync
+        tasks_from: deploy
+      tags: [deploy]

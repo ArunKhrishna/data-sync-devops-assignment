@@ -1,0 +1,39 @@
+---
+- name: Deploy data-sync
+  when: be_role | default('') == 'service'
+  block:
+    # Runs as the app user so git does not complain about repo ownership.
+    - name: Clone or update the data-sync repo
+      ansible.builtin.git:
+        repo: "{{ data_sync_repo_url }}"
+        dest: "{{ data_sync_app_dir }}"
+        version: "{{ data_sync_repo_version }}"
+      become: true
+      become_user: "{{ data_sync_user }}"
+      notify: Restart data-sync
+
+    - name: Install Python dependencies into the virtualenv
+      ansible.builtin.pip:
+        requirements: "{{ data_sync_app_dir }}/requirements.txt"
+        virtualenv: "{{ data_sync_venv_dir }}"
+        virtualenv_command: "{{ data_sync_python }} -m venv"
+        extra_args: --no-cache-dir
+      become: true
+      become_user: "{{ data_sync_user }}"
+      notify: Restart data-sync
+
+    - name: Deploy systemd unit
+      ansible.builtin.template:
+        src: data-sync.service.j2
+        dest: /etc/systemd/system/data-sync.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart data-sync
+
+    - name: Enable and start data-sync
+      ansible.builtin.systemd_service:
+        name: data-sync
+        enabled: true
+        state: started
+        daemon_reload: true

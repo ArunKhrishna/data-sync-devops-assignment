@@ -1,0 +1,25 @@
+---
+# Required settings. Override these in group_vars.
+data_sync_app_env: staging
+data_sync_redis_host: localhost
+data_sync_log_level: INFO
+
+data_sync_redis_port: 6379
+
+# Placeholder repo. Pin a tag or commit for real deployments.
+data_sync_repo_url: https://github.com/brightedge/data-sync.git
+data_sync_repo_version: main
+
+data_sync_app_dir: /srv/data-sync
+data_sync_venv_dir: "{{ data_sync_app_dir }}/venv"
+data_sync_python: /usr/bin/python3.9
+
+data_sync_user: data-sync
+data_sync_group: data-sync
+
+data_sync_port: 8080
+data_sync_workers: 4
+# Assumed entrypoint. Adjust to match the app.
+data_sync_exec_start: >-
+  {{ data_sync_venv_dir }}/bin/uvicorn app.main:app
+  --host 0.0.0.0 --port {{ data_sync_port }} --workers {{ data_sync_workers }}

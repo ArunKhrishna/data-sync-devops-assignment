@@ -1,0 +1,7 @@
+---
+# Run ansible-lint from this directory. This file makes ansible/ the lint root.
+profile: production
+
+skip_list:
+  # Team convention is be-{service} (be-redis, be-haproxy). Hyphens work fine in Ansible.
+  - role-name

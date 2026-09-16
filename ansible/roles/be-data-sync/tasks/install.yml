@@ -1,0 +1,37 @@
+---
+- name: Install data-sync prerequisites
+  when: be_role | default('') == 'service'
+  block:
+    - name: Install Python 3.9, pip and git
+      ansible.builtin.yum:
+        name:
+          - python39
+          - python39-pip
+          - git
+          # Needed so Ansible can run tasks as the unprivileged app user.
+          - acl
+        state: present
+
+    - name: Create app group
+      ansible.builtin.group:
+        name: "{{ data_sync_group }}"
+        system: true
+        state: present
+
+    - name: Create app user
+      ansible.builtin.user:
+        name: "{{ data_sync_user }}"
+        group: "{{ data_sync_group }}"
+        system: true
+        shell: /sbin/nologin
+        home: "{{ data_sync_app_dir }}"
+        create_home: false
+        state: present
+
+    - name: Create app directory
+      ansible.builtin.file:
+        path: "{{ data_sync_app_dir }}"
+        state: directory
+        owner: "{{ data_sync_user }}"
+        group: "{{ data_sync_group }}"
+        mode: "0755"

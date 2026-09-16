@@ -1,0 +1,4 @@
+---
+data_sync_app_env: production
+data_sync_redis_host: redis-prod.data-sync.internal
+data_sync_log_level: INFO

@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: platform-team
+  description: Deploys the data-sync FastAPI service on EL8 VMs
+  license: MIT
+  min_ansible_version: "2.16"
+  platforms:
+    - name: EL
+      versions:
+        - "8"
+dependencies: []

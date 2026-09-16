@@ -1,0 +1,24 @@
+# {{ ansible_managed }}
+[Unit]
+Description=data-sync API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ data_sync_user }}
+Group={{ data_sync_group }}
+WorkingDirectory={{ data_sync_app_dir }}
+Environment="APP_ENV={{ data_sync_app_env }}"
+Environment="REDIS_HOST={{ data_sync_redis_host }}"
+Environment="REDIS_PORT={{ data_sync_redis_port }}"
+Environment="LOG_LEVEL={{ data_sync_log_level }}"
+# Optional file for REDIS_PASSWORD, managed outside this role (for example with Ansible Vault).
+EnvironmentFile=-/etc/data-sync/secrets.env
+ExecStart={{ data_sync_exec_start }}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
