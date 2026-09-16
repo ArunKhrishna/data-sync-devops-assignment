@@ -29,6 +29,9 @@ Kustomize production overlay, plus an Ansible role for the VM path.
     └── minikube/                   # test-only Redis (Minikube has no managed Redis)
 ```
 
+`standard/` is the path the assignment specifies for the kustomization, not a Kustomize
+convention. The usual layout would be `base/` next to `overlays/production/`.
+
 The assignment's `playbooks/` and `group_vars/` paths live under `ansible/`
 (`ansible/playbooks/`, `ansible/group_vars/`), so ansible-lint and `ansible-playbook` only
 see one root.
