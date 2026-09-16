@@ -5,14 +5,13 @@
 The chart scales data-sync with a `HorizontalPodAutoscaler` (`autoscaling/v2`) on CPU
 utilization: staging stays on a fixed `replicaCount`, production runs `minReplicas: 3` to
 `maxReplicas: 20` at 70 percent CPU, computed against the CPU *request* (`cpu: "2"`), never
-the limit (`cpu: "4"`, `docs/DECISIONS.md` #5). Scale-up reacts within 15
-seconds (a large percent-based step); scale-down is deliberately slow (5-minute
-stabilization), so a brief spike does not thrash pods up and back down.
+the limit (`cpu: "4"`, `docs/DECISIONS.md` #5). Scale-up reacts within 15 seconds (a large
+percent-based step); scale-down is deliberately slow (5-minute stabilization), so a brief
+spike does not thrash pods.
 
 CPU-based HPA alone cannot reliably get scale-out under 20 seconds: the metrics-server poll
 interval (about 15 seconds) plus image pull and startup-probe time puts a floor around 30 to
-90 seconds, since the HPA cannot react to unmeasured load. Two changes close that gap for the
-2,000 req/s burst in the scenario:
+90 seconds. Two changes close that gap for the 2,000 req/s burst in the scenario:
 
 - **Pre-warm the floor.** Raise `minReplicas` to steady-state peak traffic, so bursts are
   absorbed by already-Ready pods instead of waiting on the scale-out path. Cost: idle
@@ -49,17 +48,16 @@ For the ClickHouse noisy-neighbor case, isolation starts with scheduling, not se
 hardening. Taint the nodes ClickHouse runs on with something like
 `workload=analytics:NoSchedule`; give data-sync a matching `toleration` only where it should
 share a node, and `nodeAffinity`/`nodeSelector` (chart values, currently empty) to pin it
-elsewhere. A `priorityClassName` above ClickHouse's own means the kubelet evicts the
-batch workload first under real node pressure, not the request-serving one. A namespace-level
-`ResourceQuota` and `LimitRange` back this up so no workload can request past what a node
-actually has.
+elsewhere. A `priorityClassName` above ClickHouse's own means the kubelet evicts the batch
+workload first under real node pressure, not the request-serving one. A namespace-level
+`ResourceQuota` and `LimitRange` stop any workload requesting past what a node has.
 
 Memory `requests == limits` still protects data-sync from eviction if ClickHouse's memory use
 pushes the node into pressure; the CPU limit sits above the request (`docs/DECISIONS.md` #5),
 so CPU-side protection comes from the taint and priority class above, not QoS class. Topology
-spread bounds blast radius the same way: replicas land
-across zones instead of piling onto free nodes, so a zone outage removes at most a third of
-the fleet, and the PDB stops maintenance from taking more than that on top of a real outage.
+spread bounds blast radius: replicas land across zones rather than piling onto free nodes, so
+a zone outage costs at most a third of the fleet, and the PDB stops maintenance compounding
+that.
 
 Decision rule for a **dedicated node pool**: stay on tainted shared nodes while taints,
 priority classes and quotas keep p99 latency stable. Move once contention still shows up in
@@ -95,7 +93,9 @@ editing the Secret alone leaves pods holding the old value. `deployment.yaml` se
 `checksum/config` and `checksum/secret` on the pod template from a SHA-256 of the rendered
 ConfigMap and Secret. Helm computes that hash only at template time, so the Kustomize
 overlay's `replacements` block copies the rendered `checksum/secret` into a second
-`SECRET_CHECKSUM` annotation, keeping the behaviour through the overlay.
+`SECRET_CHECKSUM` annotation, keeping the behaviour through the overlay. That hash exists only
+when the chart renders the Secret. Under `existingSecret`, External Secrets updates it in
+place, nothing changes the pod template, and that path needs a watcher like Reloader.
 
 Because the annotation lives on the pod template, changing it changes the template hash and
 triggers a normal rolling update: new pods start, pass readiness, and only then do old pods
