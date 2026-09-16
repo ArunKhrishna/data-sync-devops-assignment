@@ -59,7 +59,7 @@ secret change alone is enough to trigger a rolling update, with no separate rest
 |---|---|---|---|
 | Replicas | 1, fixed | 2, fixed | 3 to 20, HPA-managed |
 | Log level | DEBUG | INFO | INFO |
-| Resources | requests below limits | requests below limits | requests equal limits |
+| Resources | requests below limits | requests below limits | CPU: request, no limit. Memory: requests equal limits |
 | Autoscaling | off | off | on, 70% CPU target |
 | PDB | on, minAvailable default | on | on |
 | Zone spread | off (chart default) | off | on, via Kustomize overlay |
@@ -73,7 +73,7 @@ secret change alone is enough to trigger a rolling update, with no separate rest
 | Scalability | HPA with asymmetric scale-up/scale-down behavior |
 | Observability | `/metrics` scraped via ServiceMonitor, `/health` for liveness/readiness/startup |
 | Security | non-root, read-only root filesystem, dropped capabilities, seccomp, no auto-mounted token |
-| Resource fairness | requests/limits on every pod; Guaranteed QoS in production |
+| Resource fairness | requests on every pod; production keeps memory requests equal to limits but skips a CPU limit, to avoid guaranteed CFS throttling on a latency-sensitive service (`docs/DECISIONS.md` #5) |
 | Safe rollout | checksum-triggered rolling updates, `helm rollback` / `kubectl rollout undo` as an escape hatch |
 | Config separation | per-environment values files, per-environment namespaces |
 

@@ -119,7 +119,7 @@ Deployment directly, regardless of which path deployed it.
 | `config.redisHost` | `redis-master.data-sync.svc.cluster.local` | `redis-staging.data-sync.internal` | `redis-prod.data-sync.internal` |
 | `autoscaling.enabled` | false | false | true |
 | `autoscaling.minReplicas`/`maxReplicas` | 1 / 3 | n/a | 3 / 20 |
-| `resources.requests`/`limits` | 100m/128Mi, 500m/256Mi | 250m/512Mi, 1/1Gi | 2/2Gi, 2/2Gi (requests = limits, Guaranteed QoS) |
+| `resources.requests`/`limits` | 100m/128Mi, 500m/256Mi | 250m/512Mi, 1/1Gi | cpu 2/none, memory 2Gi/2Gi (no CPU limit, see `docs/DECISIONS.md` #5) |
 | `serviceMonitor.enabled` | true | true | true |
 | `secret.existingSecret` | "" (chart creates the Secret) | "" | "" |
 

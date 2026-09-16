@@ -4,16 +4,15 @@
 
 The chart scales data-sync with a `HorizontalPodAutoscaler` (`autoscaling/v2`) on CPU
 utilization: staging stays on a fixed `replicaCount`, production runs `minReplicas: 3` to
-`maxReplicas: 20` at 70 percent CPU with requests equal to limits (`cpu: "2"`, `memory: 2Gi`)
-for Guaranteed QoS, so 70 percent means what it says with no burst headroom above the
-request. Scale-up reacts within 15 seconds (a large percent-based step); scale-down is
-deliberately slow (5-minute stabilization), so a brief spike does not thrash pods up and
-back down.
+`maxReplicas: 20` at 70 percent CPU, computed against the CPU *request* (`cpu: "2"`), not a
+limit; production sets no CPU limit (`docs/DECISIONS.md` #5). Scale-up reacts within 15
+seconds (a large percent-based step); scale-down is deliberately slow (5-minute
+stabilization), so a brief spike does not thrash pods up and back down.
 
 CPU-based HPA alone cannot reliably get scale-out under 20 seconds: the metrics-server poll
 interval (about 15 seconds) plus image pull and startup-probe time puts a floor around 30 to
-90 seconds, since the HPA cannot react to load it has not measured yet. Two changes close
-that gap for the 2,000 req/s burst in the scenario:
+90 seconds, since the HPA cannot react to unmeasured load. Two changes close that gap for the
+2,000 req/s burst in the scenario:
 
 - **Pre-warm the floor.** Raise `minReplicas` to steady-state peak traffic, so bursts are
   absorbed by already-Ready pods instead of waiting on the scale-out path. Cost: idle
@@ -25,7 +24,7 @@ that gap for the 2,000 req/s burst in the scenario:
   pipeline to keep healthy, and a second scaling signal to reason about.
 
 Together: pre-warmed `minReplicas` absorbs the first seconds, KEDA covers the rest of the
-ramp, and CPU-based HPA remains the fallback if the metrics pipeline is down.
+ramp, and CPU-based HPA is the fallback if the metrics pipeline is down.
 
 ```mermaid
 flowchart LR
@@ -46,17 +45,18 @@ flowchart LR
 For the ClickHouse noisy-neighbor case, isolation starts with scheduling, not security
 hardening. Taint the nodes ClickHouse runs on with something like
 `workload=analytics:NoSchedule`; give data-sync a matching `toleration` only where it should
-share a node, and `nodeAffinity`/`nodeSelector` (already chart values, currently empty) to
-pin it elsewhere. A `priorityClassName` above ClickHouse's own means the kubelet evicts the
+share a node, and `nodeAffinity`/`nodeSelector` (chart values, currently empty) to pin it
+elsewhere. A `priorityClassName` above ClickHouse's own means the kubelet evicts the
 batch workload first under real node pressure, not the request-serving one. A namespace-level
 `ResourceQuota` and `LimitRange` back this up so no workload can request past what a node
 actually has.
 
-Requests equal to limits (Guaranteed QoS) also stop data-sync from being throttled or evicted
-first if ClickHouse bursts past its own limits. Topology spread bounds blast radius the same
-way: replicas land across zones instead of piling onto free nodes, so a zone outage removes
-at most a third of the fleet, and the PDB stops maintenance from taking more than that on top
-of a real outage.
+Memory `requests == limits` still protects data-sync from eviction if ClickHouse's memory use
+pushes the node into pressure; data-sync carries no CPU limit (`docs/DECISIONS.md` #5), so
+CPU-side protection comes from the taint and priority class above, not QoS class. Topology
+spread bounds blast radius the same way: replicas land
+across zones instead of piling onto free nodes, so a zone outage removes at most a third of
+the fleet, and the PDB stops maintenance from taking more than that on top of a real outage.
 
 Decision rule for a **dedicated node pool**: stay on tainted shared nodes while taints,
 priority classes and quotas keep p99 latency stable. Move once contention still shows up in
@@ -68,7 +68,7 @@ Zone A            Zone B            Zone C
 ┌─────────┐       ┌─────────┐       ┌─────────┐
 │ pod-1   │       │ pod-2   │       │ pod-3   │
 │ 2 CPU   │       │ 2 CPU   │       │ 2 CPU   │
-│ Guaran. │       │ Guaran. │       │ Guaran. │
+│ req,noL │       │ req,noL │       │ req,noL │
 └─────────┘       └─────────┘       └─────────┘
      one zone lost -> PDB still guards minAvailable
      across the two that remain

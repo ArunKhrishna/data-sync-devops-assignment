@@ -10,13 +10,30 @@ secret:
   # or point existingSecret at a Secret synced from Secret Manager.
   redisPassword: CHANGE_ME
 
-# Requests equal limits, so pods get the Guaranteed QoS class.
+# CPU: request only, no limit. CPU limit == CPU request would guarantee CFS
+# throttling the moment the pod bursts above 2 cores (startup, GC, traffic
+# spikes), even with idle CPU free on the node, since CPU limits are enforced
+# per 100ms scheduling window regardless of node headroom. Latency-sensitive
+# services should set a CPU request for scheduling/HPA accuracy and skip the
+# limit; this matches GKE's own guidance for such workloads.
+#
+# Memory: request equals limit. Memory has no throttle, only OOM kill, so
+# equal request/limit just means "no surprise OOM," which is unambiguously
+# safe (unlike the CPU case above).
+#
+# Net effect: this pod is Burstable QoS, not Guaranteed, trading eviction
+# priority for latency stability. Isolation from noisy neighbors (see
+# DESIGN.md) leans on priorityClassName, taints and ResourceQuota instead.
 resources:
   requests:
     cpu: "2"
     memory: 2Gi
   limits:
-    cpu: "2"
+    # Explicit null, not just an absent key: Helm's values merge fills a
+    # missing key in from values.yaml's default (500m), it does not delete
+    # it. Only an explicit null here, paired with deployment.yaml skipping
+    # null limit keys, actually removes the CPU limit.
+    cpu: null
     memory: 2Gi
 
 preStopSleepSeconds: 10

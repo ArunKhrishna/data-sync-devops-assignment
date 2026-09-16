@@ -36,13 +36,24 @@
    - Trade-off: environment-specific values files must stay disciplined, since nothing stops
      someone pointing the staging values file at the production namespace by mistake.
 
-5. **Guaranteed QoS in production**
-   - Chosen: `resources.requests == resources.limits` for production only.
-   - Alternatives: requests below limits everywhere, relying on the HPA alone for headroom.
-   - Why: Guaranteed QoS pods are the kubelet's last eviction candidates under node pressure,
-     and it makes the HPA's CPU percentage exact rather than approximate.
-   - Trade-off: less bin-packing efficiency; nodes must be sized assuming every pod uses its
-     full request.
+5. **Asymmetric CPU/memory resource shape in production**
+   - Chosen: memory `requests == limits`; CPU gets a request but no limit.
+   - Alternatives: `requests == limits` on both (Guaranteed QoS); requests below limits on
+     both, relying on the HPA alone for headroom.
+   - Why: CPU and memory fail differently. Memory is incompressible: going over the limit is
+     an OOM kill, so `requests == limits` just removes the surprise, at no cost. CPU is
+     compressible: a CPU limit is enforced by the kernel's CFS quota every 100ms regardless
+     of whether the node has idle CPU, so `limit == request` guarantees throttling on every
+     burst above steady state (startup, GC, traffic spikes), which is the wrong trade for a
+     latency-sensitive service. This is GKE's own stated guidance for such workloads, not a
+     project-specific opinion. The HPA's CPU target percentage is computed against the
+     request either way; it does not depend on whether a limit exists.
+   - Trade-off: the pod is Burstable QoS, not Guaranteed, so it is not the kubelet's
+     last-choice eviction candidate under generic node memory pressure. Isolation from a
+     specific noisy neighbor (ClickHouse) is carried by `priorityClassName`, taints and
+     `ResourceQuota`/`LimitRange` instead of by QoS class; see DESIGN.md's workload isolation
+     section. A CPU-heavy pod on this node could also consume idle CPU other pods might have
+     used, though only up to what the node actually has free.
 
 6. **HPA scaling behavior**
    - Chosen: explicit `behavior.scaleUp` (fast) and `behavior.scaleDown` (slow) policies in

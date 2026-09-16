@@ -78,7 +78,14 @@ spec:
                 seconds: {{ .Values.preStopSleepSeconds }}
           {{- end }}
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            requests:
+              {{- toYaml .Values.resources.requests | nindent 14 }}
+            limits:
+              {{- range $key, $value := .Values.resources.limits }}
+              {{- if $value }}
+              {{ $key }}: {{ $value }}
+              {{- end }}
+              {{- end }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           volumeMounts:
