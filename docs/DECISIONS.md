@@ -42,8 +42,11 @@
      script.
    - Why: kustomize has no built-in hash function, but it can copy a field that Helm already
      computed.
-   - Trade-off: `SECRET_CHECKSUM` is not itself consumed by anything; it exists only as an
-     auditable proof that the pod template annotation moved through the overlay unchanged.
+   - Trade-off: it duplicates a value Helm already put on the pod template. Nothing reads
+     `SECRET_CHECKSUM` by name, but it is not inert either: it sits on the pod template, so
+     changing the Secret changes it, which changes the template hash and rolls the
+     Deployment. Either annotation alone would trigger the rollout; the overlay adds this one
+     under the name the brief asks for.
 
 4. **Namespace strategy**
    - Chosen: one namespace per environment (`data-sync` in each cluster/context).
