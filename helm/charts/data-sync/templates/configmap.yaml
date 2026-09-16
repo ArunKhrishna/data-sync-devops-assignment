@@ -1,0 +1,19 @@
+{{- $allowedEnvs := list "staging" "production" }}
+{{- if not (has .Values.config.appEnv $allowedEnvs) }}
+{{- fail (printf "config.appEnv must be one of %v, got %q" $allowedEnvs .Values.config.appEnv) }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "data-sync.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "data-sync.labels" . | nindent 4 }}
+data:
+  # Values are quoted because ConfigMap data only accepts strings.
+  APP_ENV: {{ .Values.config.appEnv | quote }}
+  REDIS_HOST: {{ .Values.config.redisHost | quote }}
+  REDIS_PORT: {{ .Values.config.redisPort | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  WORKERS: {{ .Values.config.workers | quote }}
+  MAX_CONNECTIONS: {{ .Values.config.maxConnections | quote }}

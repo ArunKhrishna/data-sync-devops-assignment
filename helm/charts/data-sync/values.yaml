@@ -1,0 +1,114 @@
+# Safe defaults for local and dev use. Environment files override only what differs.
+
+nameOverride: ""
+fullnameOverride: ""
+
+replicaCount: 1
+revisionHistoryLimit: 5
+
+image:
+  # Placeholder image. Replace with the real registry path.
+  repository: us-docker.pkg.dev/brightedge-platform/services/data-sync
+  tag: ""  # defaults to the chart appVersion
+  pullPolicy: IfNotPresent
+
+containerPort: 8080
+
+# Non-secret settings, rendered into the ConfigMap.
+config:
+  appEnv: staging  # only staging or production are accepted
+  redisHost: redis-master.data-sync.svc.cluster.local
+  redisPort: 6379
+  logLevel: DEBUG
+  workers: 4
+  maxConnections: 100
+
+secret:
+  # Name of a Secret managed outside the chart (for example by External Secrets).
+  # When empty, the chart creates the Secret from redisPassword.
+  existingSecret: ""
+  redisPassword: local-dev-only
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 25%
+    maxUnavailable: 0
+
+probes:
+  path: /health
+  startup:
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 30
+  readiness:
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 3
+  liveness:
+    # More tolerant than readiness so a slow dependency does not restart pods.
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 6
+
+preStopSleepSeconds: 5
+terminationGracePeriodSeconds: 30
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+  behavior: {}
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+serviceMonitor:
+  # Requires kube-prometheus-stack. Set to false on clusters without it.
+  enabled: true
+  path: /metrics
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    release: kube-prometheus-stack
+
+serviceAccount:
+  create: true
+  name: ""
+
+podAnnotations: {}
+priorityClassName: ""
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []

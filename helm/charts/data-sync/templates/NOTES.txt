@@ -1,0 +1,12 @@
+data-sync {{ .Chart.AppVersion }} deployed to namespace {{ .Release.Namespace }} (APP_ENV={{ .Values.config.appEnv }}).
+
+Check the rollout:
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "data-sync.fullname" . }}
+
+Test the health endpoint:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "data-sync.fullname" . }} 8080:{{ .Values.service.port }}
+  curl -s localhost:8080/health
+{{- if and (not .Values.secret.existingSecret) (eq .Values.secret.redisPassword "CHANGE_ME") }}
+
+WARNING: secret.redisPassword is still the placeholder. Pass the real value with --set-string.
+{{- end }}

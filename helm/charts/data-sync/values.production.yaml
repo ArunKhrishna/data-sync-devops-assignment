@@ -1,0 +1,46 @@
+# Production overrides. Helm applies values.yaml first, then this file.
+
+config:
+  appEnv: production
+  redisHost: redis-prod.data-sync.internal  # placeholder
+  logLevel: INFO
+
+secret:
+  # Placeholder. Pass the real value at deploy time with --set-string,
+  # or point existingSecret at a Secret synced from Secret Manager.
+  redisPassword: CHANGE_ME
+
+# Requests equal limits, so pods get the Guaranteed QoS class.
+resources:
+  requests:
+    cpu: "2"
+    memory: 2Gi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+preStopSleepSeconds: 10
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      selectPolicy: Max
+      policies:
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+    scaleDown:
+      # Scale down slowly to avoid flapping after a burst.
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 20
+          periodSeconds: 60
